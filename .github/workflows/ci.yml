@@ -15,8 +15,9 @@ on:
   push:
     branches: [main]
   schedule:
-    # Weekly Monday 04:23 UTC sweep: govulncheck + gosec. Lane jobs also run
-    # as a post-merge record; only the two scan jobs can file issues.
+    # Weekly Monday 04:23 UTC sweep: every lane runs as a record, and only
+    # the two scan jobs can file issues. Lane jobs also run as a
+    # post-merge record on pushes to main.
     - cron: '23 4 * * 1'
 
 permissions:

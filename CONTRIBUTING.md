@@ -16,7 +16,7 @@ Job names are frozen because branch protection requires `ci-complete`:
 
 | Lane | Runs when |
 | --- | --- |
-| `lint` | Go sources, module or lint-config changes, unclassified files |
+| `lint` | Go sources, module or lint-config changes, workflow changes, unclassified files |
 | `test` | Above, plus fixtures and config the tests read |
 | `race` | Same inputs as `test`, plus a coverage artifact and floor check |
 | `shell` | Shell script changes |
@@ -26,8 +26,8 @@ Job names are frozen because branch protection requires `ci-complete`:
 | `ci-complete` | Always; fails on any needed lane failure, passes on legitimate skips |
 
 Docs-only PRs run no lane and stay mergeable through `ci-complete`.
-A manual `workflow_dispatch` run records every lane; the weekly schedule
-runs `govulncheck` and `gosec` only.
+A manual `workflow_dispatch` run and the weekly schedule run every lane as
+a record; only `govulncheck` and `gosec` can file issues from the schedule.
 
 ## Coverage floor
 
