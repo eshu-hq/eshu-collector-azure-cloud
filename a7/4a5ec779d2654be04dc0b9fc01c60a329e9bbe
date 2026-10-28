@@ -1,0 +1,14 @@
+scripts/smoke.sh
+  h_78a442cba0b3e6 1-3
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a74a5ec779d2654be04dc0b9fc01c60a329e9bbe",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
