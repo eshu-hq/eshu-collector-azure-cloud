@@ -18,7 +18,7 @@ Job names are frozen because branch protection requires `ci-complete`:
 | --- | --- |
 | `lint` | Go sources, module or lint-config changes, workflow changes, unclassified files |
 | `test` | Above, plus fixtures and config the tests read |
-| `race` | Same inputs as `test`, plus a coverage artifact and floor check |
+| `race` | Go, dependency, workflow, or unclassified changes (never fixture-only), plus a coverage artifact and floor check |
 | `shell` | Shell script changes |
 | `image` | Vacuous proof until a Dockerfile lands (see #3) |
 | `govulncheck` | Dependency changes, pushes to `main`, weekly schedule |
