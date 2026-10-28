@@ -4,3 +4,5 @@
 // the module root so the CI gates (vet, lint, test, race, coverage) have a
 // package to judge from the first commit. It carries no behavior.
 package collector
+
+// Lane-selection touch for the green run (proof-only).
