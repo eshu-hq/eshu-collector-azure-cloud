@@ -1,3 +1,6 @@
+// SPDX-License-Identifier: MIT
+// Copyright (c) 2025-2026 eshu-hq
+
 // Package collector is the root of the Eshu Azure cloud collector module.
 //
 // The collector port itself lands under eshu-hq/eshu#8876; this file holds
