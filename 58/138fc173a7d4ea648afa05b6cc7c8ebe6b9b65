@@ -1,0 +1,24 @@
+go.mod
+  h_78a442cba0b3e6 4-5
+seed_cap.go
+  h_78a442cba0b3e6 1-501
+seed_fmt.go
+  h_78a442cba0b3e6 1-6
+seed_lint.go
+  h_78a442cba0b3e6 1-9
+seed_race_test.go
+  h_78a442cba0b3e6 1-17
+seed_vet.go
+  h_78a442cba0b3e6 1-5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "58138fc173a7d4ea648afa05b6cc7c8ebe6b9b65",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
