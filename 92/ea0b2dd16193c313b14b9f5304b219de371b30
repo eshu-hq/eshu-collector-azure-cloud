@@ -1,0 +1,17 @@
+ci_caller_test.go
+  h_78a442cba0b3e6 1-84
+.github/workflows/ci.yml
+  h_78a442cba0b3e6 4,7-12,15-22,28-31,112-113,115,117-139,143
+  h_78a442cba0b3e6 116
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "92ea0b2dd16193c313b14b9f5304b219de371b30",
+  "prompts": {},
+  "humans": {
+    "h_78a442cba0b3e6": {
+      "author": "Allen Sanabria <asanabria6910@gmail.com>"
+    }
+  }
+}
