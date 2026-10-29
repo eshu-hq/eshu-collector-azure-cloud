@@ -22,12 +22,16 @@ Job names are frozen because branch protection requires `ci-complete`:
 | `shell` | Shell script changes |
 | `image` | Vacuous proof until a Dockerfile lands (see #3) |
 | `govulncheck` | Dependency changes, pushes to `main`, weekly schedule |
-| `gosec` | Go or dependency changes, pushes to `main`, weekly schedule; advisory, SARIF to the Security tab |
+| `gosec` | Go or dependency changes, pushes to `main`, weekly schedule; findings fail red on schedule, advisory on PRs |
 | `ci-complete` | Always; fails on any needed lane failure, passes on legitimate skips |
 
-Docs-only PRs run no lane and stay mergeable through `ci-complete`.
+Lane bodies run inside the pinned `eshu-hq/.github` reusable; the caller
+holds only `changes`, `lanes`, and `ci-complete`. Docs-only PRs run no
+lane and stay mergeable through `ci-complete`.
 A manual `workflow_dispatch` run and the weekly schedule run every lane as
-a record; only `govulncheck` and `gosec` can file issues from the schedule.
+a record. Neither lane uploads SARIF to the Security tab nor files an
+issue: findings ride the run page and the uploaded SARIF artifact, and
+per-scan filing waits on the upstream hook (eshu-hq/.github#10).
 
 ## Coverage floor
 
