@@ -72,3 +72,25 @@ make ci
 500-line `.go` file cap, `go build`, the full test suite, and the race suite.
 The race lane additionally enforces the coverage floor (currently 76; see
 `CONTRIBUTING.md` — it may only rise).
+
+## Releases
+
+Every artifact in `manifest.yaml` is digest-pinned (`@sha256:…`, never
+`:latest`). The current digest is a local-build digest (see the comment in
+`manifest.yaml`): after the first image push, re-pin it with the registry
+digest from the release job summary. Base images in `Dockerfile` are pinned
+the same way; re-pin them when bumping either base. `version` in
+`manifest.yaml` and the git tag must match (`v0.1.0` for `0.1.0`); pushing
+a `v*` tag runs `release.yml`, which builds, signs, and publishes the image
+plus SBOM and provenance attestations. The workflow publishes only when the
+tag is exactly `v` plus the manifest version and points at the protected
+`main` head; anything else fails before anything builds or pushes.
+
+What pushes publish: every push to `main` publishes `:main`, `:latest`
+(both moving), and `:sha-<long-sha>`; every push of a version tag publishes
+that tag. Nothing runs on a pull request and nothing here deploys. Copy the
+`seed.image` reference
+(`ghcr.io/eshu-hq/eshu-collector-azure-cloud@sha256:…`) from the release job
+summary into the activation. No tenant exists yet, so a release ships the
+image but proves nothing live; tenant-backed proof stays deferred to
+eshu-hq/eshu#9825.
