@@ -18,7 +18,7 @@ Source of truth for paths and identities: `eshu-hq/eshu` at the cutover base
 | `config.go` (env targets, fixture pages) | `cmd/collector/stdio.go` + `local.go` | Targets/fixtures arrive in the stdio request or flags; credentials by name only |
 | `claimed_config.go` (instance selection) | claim authorization in `source.go` `targetForClaim` | Host owns claims; the satellite authorizes the claim scope against its targets and rejects the rest before any provider call |
 | `service.go` (collector/claimed service wiring) | `collectWithPages`/`collectWithProvider` in `cmd/collector/stdio.go` | No committer: the SDK `Result` is the commit boundary the host consumes |
-| `azure_live_client.go` (live factory) | `LiveProviderFactory` in `provider.go` | Seam only: the zero value fails closed with `ErrLiveProviderGated`; no Azure SDK ships here |
+| `azure_live_client.go` (ambient credential + live factory) | `cmd/collector/live.go` (ambient `DefaultAzureCredential` by NAME, claim-first `collectLivePlan`) + `LiveProviderFactory` in `live.go` | Shipped: explicit opt-in plus an authorized claim reach the injected SDK adapter; the zero value still fails closed; tenant proof deferred to eshu-hq/eshu#9825 |
 | `status_committer.go` (claim-status committer) | `Monitor` in `health.go` + `Result.Statuses` | Bounded claim outcomes ride the result and the stderr health line; durable status is host-owned |
 
 ## 2. Fact engine: `go/internal/collector/cloud/azure/` → root package
@@ -36,6 +36,7 @@ Ported file-for-file (the repo name already says which collector this is):
 - `metrics.go` → `metrics.go` (same vocabulary; in-memory counting instead of OTel — no OTel dependency crosses the boundary)
 - `runtime/provider.go` (`PageProviderFactory`, fixture providers) → `provider.go`
 - `runtime/source.go` + `runtime/claimed_source.go` + `runtime/config.go` → `source.go` + `types.go` (config)
+- `runtime/live_provider.go` → `live.go` (factory, retry bounds, error kinds); `runtime/live_provider_sdk.go` → `live_client.go` (SDK adapter, 64KiB row cap, error classification, retry-after); `runtime/live_provider_arm_sdk.go` + `runtime/live_provider_armfallback.go` → `livearm.go` (allowlist, byte bound)
 
 ## 3. Port rules (kept, with satellite adaptations)
 
@@ -53,6 +54,10 @@ Ported file-for-file (the repo name already says which collector this is):
   carries one grant per kind per schema version; `config.example.json`
   documents the fixture target shape.
 - Fixture mode is the default; live transport requires the explicit `--live`
-  / `"live": true` opt-in and fails closed at the gated seam.
+  / `"live": true` opt-in plus a host claim the satellite authorizes before
+  any adapter is built, resolves the credential by NAME from the ambient
+  workload identity, and fails closed otherwise. Emission shapes never change
+  between seams: live-collected rows must converge byte-for-byte with fixture
+  rows (`TestLiveCollectionMatchesFixtureParity`).
 - No reducer admission, no new fact families, no API/MCP readback, no Helm —
   all core-owned (see `NOT_PORTED.md`).

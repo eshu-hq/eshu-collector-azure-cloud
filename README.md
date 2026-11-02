@@ -44,9 +44,14 @@ go run ./cmd/collector --sdk-stdio < request.json > result.json
 
 The request carries `protocol_version`, the host `claim`, and `config.source`
 with `collector_instance_id`, `targets`, `fixture_pages`, and an optional
-`redaction_key_file`. Live transport requires the explicit `"live": true`
-opt-in and fails closed (`ErrLiveProviderGated`) until a read-only adapter is
-injected. Credentials are referenced by NAME only and never logged.
+`redaction_key_file`. Live transport ships but stays unproven (no tenant
+exists yet): it requires the explicit `"live": true` opt-in plus a host claim
+the satellite authorizes before any adapter is built, resolves the credential
+by NAME from the ambient workload identity, and fails closed otherwise. The
+zero-value factory still returns `ErrLiveProviderGated`. Credential values
+are never read from config and never logged; live-shaped rows redact
+identically to fixtures. Tenant-backed proof stays deferred to
+eshu-hq/eshu#9825.
 
 Image lane (builds the actual collector; `docker run` with no args repeats
 the fixture proof):

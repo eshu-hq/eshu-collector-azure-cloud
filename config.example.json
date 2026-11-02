@@ -16,5 +16,6 @@
   "fixture_pages": [
     "testdata/resources_page1.json",
     "testdata/resources_page2.json"
-  ]
+  ],
+  "live": false
 }

@@ -80,6 +80,10 @@ const (
 	// WarningFallbackSkipped marks an ARM fallback skipped because the resource
 	// family was not allowlisted.
 	WarningFallbackSkipped = "fallback_skipped"
+	// WarningFallbackCapped marks an ARM fallback skipped because the
+	// per-page fallback call cap was reached. The row keeps its Resource
+	// Graph evidence; only the best-effort enrichment is missing.
+	WarningFallbackCapped = "fallback_capped"
 	// WarningStale marks evidence older than the configured freshness window.
 	WarningStale = "stale"
 	// WarningUnsupported marks a resource family or evidence type the source

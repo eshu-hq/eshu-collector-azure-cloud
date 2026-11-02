@@ -109,16 +109,23 @@ func (s *Source) Collect(ctx context.Context, claim sdk.Claim) (sdk.Result, erro
 	return collected.Result(claim, observedAt), nil
 }
 
+// AuthorizeClaim validates the host claim against the configured Azure
+// collector instance and resolves the single authorized scope target without
+// touching the provider. Live wiring calls it before building any adapter so
+// an unauthorized or stale claim fails closed with no transport constructed.
+func (s *Source) AuthorizeClaim(claim sdk.Claim) (TargetConfig, error) {
+	return s.targetForClaim(claim)
+}
+
 // targetForClaim validates the host claim against the configured Azure
 // collector instance and resolves the single authorized scope target. Errors
-// never embed configured provider identity.
+// never embed configured provider identity. It needs no provider: Collect and
+// Next reject a nil ProviderFactory before they scan, so authorization stays
+// callable before any adapter exists.
 func (s *Source) targetForClaim(claim sdk.Claim) (TargetConfig, error) {
 	config, err := s.Config.validated()
 	if err != nil {
 		return TargetConfig{}, err
-	}
-	if s.ProviderFactory == nil {
-		return TargetConfig{}, fmt.Errorf("azure page provider factory is required")
 	}
 	if strings.TrimSpace(claim.CollectorKind) != CollectorKind {
 		return TargetConfig{}, fmt.Errorf("claimed collector_kind %q must be %q", claim.CollectorKind, CollectorKind)

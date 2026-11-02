@@ -5,7 +5,6 @@ package collector
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -33,34 +32,6 @@ func (f PageProviderFactoryFunc) PageProvider(
 	target TargetConfig,
 ) (PageProvider, error) {
 	return f(ctx, boundary, target)
-}
-
-// ErrLiveProviderGated is returned by the live adapter seam. The live Azure
-// Resource Graph/ARM client is a documented seam and is never the default:
-// callers must inject a real adapter once the live client lands behind its own
-// credential and quota proof. Fixture mode never reaches it.
-var ErrLiveProviderGated = errors.New(
-	"azure live resource graph provider is gated: inject a read-only PageProviderFactory",
-)
-
-// LiveProviderFactory is the gated live Resource Graph seam. Its zero value is
-// inert: PageProvider always fails closed with ErrLiveProviderGated so no
-// default code path and no test can issue a live Azure request. Live transport
-// is reachable only when an explicitly injected read-only adapter replaces it,
-// which requires an explicit opt-in plus a granted claim in the host.
-type LiveProviderFactory struct {
-	// ResourceGraphClient is the injected read-only live client. Nil keeps the
-	// factory gated. It is opaque on purpose: the satellite ships no live Azure
-	// SDK dependency, so only an explicitly wired adapter can satisfy it.
-	ResourceGraphClient any
-}
-
-// PageProvider fails closed while no live client is injected.
-func (f LiveProviderFactory) PageProvider(context.Context, Boundary, TargetConfig) (PageProvider, error) {
-	if f.ResourceGraphClient == nil {
-		return nil, ErrLiveProviderGated
-	}
-	return nil, ErrLiveProviderGated
 }
 
 // FixturePageProvider serves pre-parsed Resource Graph pages keyed by

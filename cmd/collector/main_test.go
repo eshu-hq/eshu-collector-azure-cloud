@@ -5,6 +5,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"strings"
@@ -125,10 +126,19 @@ func TestSDKStdioRejectsBadProtocolAndLive(t *testing.T) {
 	if !plan.live {
 		t.Error("live opt-in lost, want the gated seam")
 	}
+	// The plan carries no usable claim, so collection must fail closed on the
+	// claim gate before any credential resolves or any provider is built. The
+	// stubbed factory fails the test if the gate lets the claim through.
+	previous := newLiveProviderFactory
+	newLiveProviderFactory = func(context.Context, string) (collector.PageProviderFactory, error) {
+		t.Error("provider factory reached with an unauthorized claim, want fail-closed")
+		return collector.LiveProviderFactory{}, nil
+	}
+	defer func() { newLiveProviderFactory = previous }()
 	if _, err := collectStdioPlan(plan); err == nil {
-		t.Error("live collection served without an adapter, want ErrLiveProviderGated")
-	} else if !strings.Contains(err.Error(), "gated") {
-		t.Errorf("live error = %v, want the gated seam", err)
+		t.Error("live collection served an unauthorized claim, want fail-closed")
+	} else if !strings.Contains(err.Error(), "collector_kind") {
+		t.Errorf("live error = %v, want the claim gate", err)
 	}
 }
 

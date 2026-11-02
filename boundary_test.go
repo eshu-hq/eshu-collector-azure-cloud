@@ -25,6 +25,9 @@ func TestImportBoundaryRejectsCoreAndCrossCollectorImports(t *testing.T) {
 		modulePath(t),
 		"github.com/eshu-hq/eshu-sdk/collector",
 		"github.com/eshu-hq/eshu-sdk/factschema",
+		// Live transport only: the official Azure SDK modules, pinned in
+		// go.mod. No core-owned or cross-collector imports ride along.
+		"github.com/Azure/azure-sdk-for-go/sdk",
 		"gopkg.in/yaml.v3",
 	}
 	violations := []string{}
