@@ -85,20 +85,11 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 	if live, ok := source["live"].(bool); ok {
 		plan.live = live
 	}
-	if plan.live {
-		// Explicit opt-in reaches the gated seam, which fails closed without
-		// an injected live adapter. Fixture pages are not read on the live
-		// path so an opt-in can never silently collect fixtures.
-		plan.targets = targets
-		plan.claim = request.Claim
-		return plan, nil
-	}
-	pages, err := stringSlice(source["fixture_pages"])
-	if err != nil || len(pages) == 0 {
-		return stdioPlan{}, fmt.Errorf("config %q is required in fixture mode", "source.fixture_pages")
-	}
+	// Shared plan fields resolve identically on both paths so the live opt-in
+	// honors the same key file, limits, and claim the fixture path uses.
+	// Fixture pages are not read on the live path so an opt-in can never
+	// silently collect fixtures.
 	plan.targets = targets
-	plan.fixturePages = pages
 	if keyFile, ok := source["redaction_key_file"].(string); ok {
 		plan.redactionKeyFile = strings.TrimSpace(keyFile)
 	}
@@ -106,6 +97,14 @@ func parseSDKStdio(stdin io.Reader) (stdioPlan, error) {
 		return stdioPlan{}, err
 	}
 	plan.claim = request.Claim
+	if plan.live {
+		return plan, nil
+	}
+	pages, err := stringSlice(source["fixture_pages"])
+	if err != nil || len(pages) == 0 {
+		return stdioPlan{}, fmt.Errorf("config %q is required in fixture mode", "source.fixture_pages")
+	}
+	plan.fixturePages = pages
 	return plan, nil
 }
 
@@ -118,9 +117,10 @@ func collectStdioPlan(plan stdioPlan) (resultWithMeta, error) {
 		return resultWithMeta{}, err
 	}
 	if plan.live {
-		factory := collector.LiveProviderFactory{}
-		_, err := factory.PageProvider(context.Background(), collector.Boundary{}, collector.TargetConfig{})
-		return resultWithMeta{}, err
+		// Explicit opt-in reaches the injected live adapter, which requires
+		// an ambient credential plus a host claim the satellite authorizes.
+		// Anything missing fails closed before any provider call.
+		return collectLivePlan(context.Background(), plan, key)
 	}
 	return collectWithPages(context.Background(), plan.collectorID, plan.targets, plan.claim, plan.limits, plan.fixturePages, key)
 }

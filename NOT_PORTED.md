@@ -10,10 +10,15 @@ absence is the bounded-contract port, not a gap.
 - Reducer admission for the eight azure kinds (resource identity, tag
   evidence, changes, relationships, DNS, image references, warnings) and the
   API/MCP readback surfaces, including the readback strip of raw tag values.
-- The live Azure Resource Graph/ARM transport: credentials, quota, throttle,
-  retry, and the read-only client. The satellite ships the gated seam
-  (`LiveProviderFactory` fails closed) and fixture providers only. Real-tenant
-  promotion stays gated by the in-tree cutover issue.
+- Live Azure proof against a real tenant. The satellite ships the live
+  Resource Graph/ARM transport (explicitly injected `LiveProviderFactory`,
+  the SDK client adapter, throttled/permission-hidden/token-expired/skip-token
+  error classification, quota and retry bounds, and the ARM fallback
+  allowlist) behind the explicit `--live` / `"live": true` opt-in plus a host
+  claim the satellite authorizes before any adapter is built. The zero value
+  still fails closed. Exercising the transport against a real tenant stays
+  deferred to eshu-hq/eshu#9825; no live proof is claimed here and none is
+  possible without a tenant.
 - Claim scheduling, workflow control, fencing, and lease handoff
   (`collector.ClaimedService`, the workflow control store). The host drives
   one claim per stdio invocation; the satellite authorizes the scope and

@@ -74,7 +74,6 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 
 	monitor := collector.NewMonitor()
 	monitor.SetResource(limits)
-	monitor.MarkFixtureOnly()
 
 	var result resultWithMeta
 	var err error
@@ -84,6 +83,11 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 		if err == nil {
 			limits = plan.limits
 			monitor.SetResource(limits)
+			// Only a fixture run carries the fixture-only label; a live run
+			// leaves it false so the health line never mislabels live reads.
+			if !plan.live {
+				monitor.MarkFixtureOnly()
+			}
 			result, err = runWithTimeout(func() (resultWithMeta, error) {
 				return collectStdioPlan(plan)
 			}, limits)
@@ -96,6 +100,9 @@ func run(args []string, stdin io.Reader, stdout io.Writer, stderr io.Writer) err
 			generationID:     strings.TrimSpace(*generationID),
 			redactionKeyFile: strings.TrimSpace(*redactionKeyFile),
 			live:             *live,
+		}
+		if !opts.live {
+			monitor.MarkFixtureOnly()
 		}
 		result, err = runWithTimeout(func() (resultWithMeta, error) {
 			return collectLocal(opts, limits)
