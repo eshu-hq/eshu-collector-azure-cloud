@@ -1,9 +1,17 @@
 // SPDX-License-Identifier: MIT
-// Copyright (c) 2025-2026 eshu-hq
+// Copyright (c) 2026 eshu-hq
 
-// Package collector is the root of the Eshu Azure cloud collector module.
+// Package collector is the standalone Eshu Azure cloud collector satellite.
 //
-// The collector port itself lands under eshu-hq/eshu#8876; this file holds
-// the module root so the CI gates (vet, lint, test, race, coverage) have a
-// package to judge from the first commit. It carries no behavior.
+// It observes Azure provider truth through a read-only page-provider seam and
+// emits versioned source facts through the published Eshu SDK stdio contract
+// (collector-sdk/v1alpha1). Fixture mode is the default: page providers serve
+// checked-in Resource Graph fixtures and no live Azure call is possible. Live
+// transport stays behind an explicit opt-in and a gated factory that fails
+// closed until a read-only adapter is injected.
+//
+// Core keeps admission, identity, projection, persistence, and recovery. This
+// module vendors no core-owned package: it imports only the published SDK
+// contracts (collector, factschema), the standard library, and yaml for its
+// own manifest document.
 package collector

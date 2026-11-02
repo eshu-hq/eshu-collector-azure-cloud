@@ -72,24 +72,27 @@ func TestCallerPinsToolVersions(t *testing.T) {
 	}
 }
 
-// TestCallerFloorStartsAtZero keeps the ratchet honest: the floor starts at
-// 0 until #2 measures the first real baseline, and may only rise.
-func TestCallerFloorStartsAtZero(t *testing.T) {
+// TestCallerFloorRatchetsFromMeasuredBaseline keeps the ratchet honest: #2
+// measured the first real baseline at 76 and the floor moved with it. It may
+// only rise from here; lowering it or deleting assertions to move the number
+// turns this red.
+func TestCallerFloorRatchetsFromMeasuredBaseline(t *testing.T) {
 	t.Parallel()
-	if text := readCIYAML(t); !strings.Contains(text, "coverage-floor: 0") {
-		t.Error("ci.yml lacks `coverage-floor: 0`: the floor must start at zero")
+	if text := readCIYAML(t); !strings.Contains(text, "coverage-floor: 76") {
+		t.Error("ci.yml lacks `coverage-floor: 76`: the floor must hold the measured #2 baseline")
 	}
 }
 
-// TestImageLaneWaitsOnDockerfile keeps the #3 tripwire semantics: with no
-// Dockerfile in the tree, the image gate follows the image filter only. A
-// non-PR short-circuit here would run a bare build with nothing to build
-// and fail every push and sweep.
-func TestImageLaneWaitsOnDockerfile(t *testing.T) {
+// TestImageLaneBuildsOnFilter keeps the #3 close-out semantics: the image
+// gate follows the image filter only, so a Dockerfile or cmd change runs a
+// real image build (no push). A non-PR short-circuit would rebuild on every
+// push and sweep; dropping the filter would skip the build on the PR that
+// needs it.
+func TestImageLaneBuildsOnFilter(t *testing.T) {
 	t.Parallel()
 	want := "run-image: ${{ needs.changes.outputs.image == 'true' }}"
 	if text := readCIYAML(t); !strings.Contains(text, want) {
-		t.Errorf("ci.yml lacks %q: run-image must stay filter-only until #3 lands", want)
+		t.Errorf("ci.yml lacks %q: run-image must stay filter-only", want)
 	}
 }
 

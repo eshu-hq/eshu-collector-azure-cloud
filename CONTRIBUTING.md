@@ -20,7 +20,7 @@ Job names are frozen because branch protection requires `ci-complete`:
 | `test` | Above, plus fixtures and config the tests read |
 | `race` | Go, dependency, workflow, or unclassified changes (never fixture-only), plus a coverage artifact and floor check |
 | `shell` | Shell script changes |
-| `image` | Vacuous proof until a Dockerfile lands (see #3) |
+| `image` | Real build of the collector image, no push (closed #3 on the first build proof) |
 | `govulncheck` | Dependency changes, pushes to `main`, weekly schedule |
 | `gosec` | Go or dependency changes, pushes to `main`, weekly schedule; findings fail red on schedule, advisory on PRs |
 | `ci-complete` | Always; fails on any needed lane failure, passes on legitimate skips |
@@ -35,7 +35,7 @@ per-scan filing waits on the upstream hook (eshu-hq/.github#10).
 
 ## Coverage floor
 
-The `race` job fails below `COVERAGE_FLOOR` in `ci.yml`. The tree holds no
-coverable statements yet, so the floor starts at 0 and may only rise toward
-the 90% target as the collector port lands (see #2). Never lower it,
-exclude packages silently, or delete assertions to move the number.
+The `race` job fails below `COVERAGE_FLOOR` in `ci.yml`. The floor holds the
+measured #2 baseline (76) and may only rise toward the 90% target from here.
+Never lower it, exclude packages silently, or delete assertions to move the
+number; raise it only with real coverable code.
