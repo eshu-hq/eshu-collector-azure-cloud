@@ -6,25 +6,14 @@ package collector
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"os"
 	"strings"
 	"testing"
-)
 
-// mustParseFixturePage loads one checked-in Resource Graph fixture page so
-// parity tests feed the live seam the exact provider shape fixtures use.
-func mustParseFixturePage(t *testing.T, path string) ResourceGraphPage {
-	t.Helper()
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		t.Fatal(err)
-	}
-	page, err := ParseResourceGraphPage(raw)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return page
-}
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore/to"
+	"github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resourcegraph/armresourcegraph"
+)
 
 // TestLiveTransportRunsUnderPoisonedProxy proves no live-transport test issues
 // a network call: the Azure SDK default pipeline honors ProxyFromEnvironment,
@@ -64,19 +53,98 @@ func TestLiveTransportRunsUnderPoisonedProxy(t *testing.T) {
 	}
 }
 
+// sdkBackedLiveResourceGraphClient is the hermetic live transport stub that
+// serves raw Azure SDK QueryResponse values — the objectArray Data shape the
+// SDK decodes — and runs every page through the production
+// liveResourceGraphPageFromSDKResponse conversion. Parity tests built on it
+// prove the real SDK Data-to-rows path instead of bypassing the conversion
+// with pre-parsed pages. It holds no HTTP client, so it issues no network
+// calls.
+type sdkBackedLiveResourceGraphClient struct {
+	calls     []LiveResourceGraphRequest
+	responses []armresourcegraph.QueryResponse
+	errs      []error
+}
+
+func (m *sdkBackedLiveResourceGraphClient) QueryResources(
+	_ context.Context,
+	request LiveResourceGraphRequest,
+) (LiveResourceGraphResponse, error) {
+	m.calls = append(m.calls, request)
+	if len(m.errs) > 0 {
+		err := m.errs[0]
+		m.errs = m.errs[1:]
+		if err != nil {
+			return LiveResourceGraphResponse{}, err
+		}
+	}
+	if len(m.responses) == 0 {
+		return LiveResourceGraphResponse{}, errors.New("unexpected live SDK query")
+	}
+	response := m.responses[0]
+	m.responses = m.responses[1:]
+	page, err := liveResourceGraphPageFromSDKResponse(response)
+	if err != nil {
+		return LiveResourceGraphResponse{}, err
+	}
+	return LiveResourceGraphResponse{Page: page}, nil
+}
+
+// mustSDKFixtureResponse parses one checked-in fixture page file into the raw
+// SDK QueryResponse shape the live seam consumes: the file's data array
+// becomes the objectArray Data decoded through encoding/json exactly as the
+// SDK unmarshals it, with the file's totalRecords, count, resultTruncated,
+// and $skipToken carried as the response metadata fields.
+func mustSDKFixtureResponse(t *testing.T, path string) armresourcegraph.QueryResponse {
+	t.Helper()
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var envelope struct {
+		TotalRecords    int64           `json:"totalRecords"`
+		Count           int64           `json:"count"`
+		ResultTruncated string          `json:"resultTruncated"`
+		SkipToken       string          `json:"$skipToken"`
+		Data            json.RawMessage `json:"data"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		t.Fatal(err)
+	}
+	var data any
+	if err := json.Unmarshal(envelope.Data, &data); err != nil {
+		t.Fatal(err)
+	}
+	truncated := armresourcegraph.ResultTruncatedFalse
+	if strings.EqualFold(strings.TrimSpace(envelope.ResultTruncated), "true") {
+		truncated = armresourcegraph.ResultTruncatedTrue
+	}
+	return armresourcegraph.QueryResponse{
+		TotalRecords:    to.Ptr(envelope.TotalRecords),
+		Count:           to.Ptr(envelope.Count),
+		ResultTruncated: to.Ptr(truncated),
+		SkipToken:       to.Ptr(envelope.SkipToken),
+		Data:            data,
+	}
+}
+
 // TestLiveCollectionMatchesFixtureParity proves the live seam emits
-// byte-identical evidence to the fixture seam for the same provider row: the
-// same page collected through the injected live client and through the fixture
-// provider must converge on stable keys, kinds, and counts. Any deviation is a
-// port defect, not an acceptable difference.
+// byte-identical evidence to the fixture seam for the same provider rows: the
+// same checked-in fixture files feed the live client as raw SDK QueryResponse
+// values (run through the production SDK Data-to-rows conversion) and feed
+// the fixture provider as parsed pages, and every emitted fact must converge
+// byte-for-byte, in order. Any deviation is a port defect, not an acceptable
+// difference.
 func TestLiveCollectionMatchesFixtureParity(t *testing.T) {
 	t.Setenv("HTTP_PROXY", "http://127.0.0.1:9/")
 	t.Setenv("HTTPS_PROXY", "http://127.0.0.1:9/")
+	t.Setenv("ALL_PROXY", "http://127.0.0.1:9/")
 
-	first := mustParseFixturePage(t, "testdata/resources_page1.json")
-	second := mustParseFixturePage(t, "testdata/resources_page2.json")
-	liveProvider, err := LiveProviderFactory{ResourceGraphClient: &fakeLiveResourceGraphClient{
-		responses: []LiveResourceGraphResponse{{Page: first}, {Page: second}},
+	liveProvider, err := LiveProviderFactory{ResourceGraphClient: &sdkBackedLiveResourceGraphClient{
+		responses: []armresourcegraph.QueryResponse{
+			mustSDKFixtureResponse(t, "testdata/resources_page1.json"),
+			mustSDKFixtureResponse(t, "testdata/resources_page2.json"),
+		},
 	}}.PageProvider(context.Background(), testBoundary(), testTarget())
 	if err != nil {
 		t.Fatalf("PageProvider() error = %v, want nil", err)
@@ -99,13 +167,17 @@ func TestLiveCollectionMatchesFixtureParity(t *testing.T) {
 		t.Fatalf("live facts = %d, fixture facts = %d, want identical emission", len(liveResult.Facts), len(fixtureResult.Facts))
 	}
 	for i := range liveResult.Facts {
-		if liveResult.Facts[i].StableKey != fixtureResult.Facts[i].StableKey {
-			t.Fatalf("fact %d stable key diverged: live %q vs fixture %q",
-				i, liveResult.Facts[i].StableKey, fixtureResult.Facts[i].StableKey)
+		liveRaw, err := json.Marshal(liveResult.Facts[i])
+		if err != nil {
+			t.Fatal(err)
 		}
-		if liveResult.Facts[i].Kind != fixtureResult.Facts[i].Kind {
-			t.Fatalf("fact %d kind diverged: live %q vs fixture %q",
-				i, liveResult.Facts[i].Kind, fixtureResult.Facts[i].Kind)
+		fixtureRaw, err := json.Marshal(fixtureResult.Facts[i])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(liveRaw) != string(fixtureRaw) {
+			t.Fatalf("fact %d diverged (live stable key %q, fixture stable key %q):\nlive:    %s\nfixture: %s",
+				i, liveResult.Facts[i].StableKey, fixtureResult.Facts[i].StableKey, liveRaw, fixtureRaw)
 		}
 	}
 }

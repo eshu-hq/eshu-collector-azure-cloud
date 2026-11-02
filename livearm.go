@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/arm"
@@ -18,7 +19,24 @@ import (
 const (
 	liveARMFallbackExtensionSchemaVersion = "azure-arm-fallback-2026-06-16"
 	maxLiveARMFallbackExtensionJSONBytes  = 64 * 1024
+	// liveARMFallbackAPIOperation is the bounded operation label recorded for
+	// every ARM fallback GET attempt. It carries no resource identity: the
+	// request's ARM ID and API version never reach telemetry labels.
+	liveARMFallbackAPIOperation = "arm_fallback_get"
+	// maxLiveARMFallbackCallsPerPage caps the ARM fallback GETs issued for one
+	// Resource Graph page. A page carries at most maxLiveResourceGraphPageSize
+	// (1000) rows, so at most that many rows could match the allowlist; the
+	// cap sits an order of magnitude below the row bound so best-effort
+	// enrichment fan-out stays bounded inside one request-timeout budget.
+	// Rows past the cap keep their Resource Graph evidence and merge explicit
+	// fallback-capped partial evidence instead of failing silently.
+	maxLiveARMFallbackCallsPerPage = 100
 )
+
+// errLiveARMFallbackCapHit stops fallback calls for the rest of one page once
+// the per-page call cap is reached. It is handled inside applyARMFallbacks
+// and never surfaces as a scan error or fact content.
+var errLiveARMFallbackCapHit = errors.New("azure arm fallback per-page call cap reached")
 
 // LiveARMFallbackClient is the read-only ARM transport consumed by
 // LiveProviderFactory for optional fallback enrichment. It intentionally
@@ -213,6 +231,8 @@ func (p *liveResourceGraphProvider) applyARMFallbacks(
 	if p.armClient == nil || len(p.armRules) == 0 || page == nil {
 		return nil
 	}
+	calls := 0
+	capped := false
 	for index := range page.Rows {
 		if ctx.Err() != nil {
 			return ctx.Err()
@@ -231,12 +251,34 @@ func (p *liveResourceGraphProvider) applyARMFallbacks(
 		if _, err := ParseARMIdentity(resourceID); err != nil {
 			continue
 		}
-		response, err := p.queryARMFallback(ctx, LiveARMFallbackRequest{
+		if capped || calls >= maxLiveARMFallbackCallsPerPage {
+			if !capped {
+				capped = true
+				p.mergeAccess(ScopeAccess{
+					Partial: true,
+					Reason:  WarningFallbackCapped,
+					Message: "arm fallback per-page call cap reached; remaining rows keep resource graph evidence",
+				})
+			}
+			continue
+		}
+		response, err := p.queryARMFallbackWithRetry(ctx, LiveARMFallbackRequest{
 			ResourceID:   resourceID,
 			ResourceType: rule.resourceType,
 			APIVersion:   rule.apiVersion,
-		})
+		}, &calls)
 		if err != nil {
+			if errors.Is(err, errLiveARMFallbackCapHit) {
+				if !capped {
+					capped = true
+					p.mergeAccess(ScopeAccess{
+						Partial: true,
+						Reason:  WarningFallbackCapped,
+						Message: "arm fallback per-page call cap reached; remaining rows keep resource graph evidence",
+					})
+				}
+				continue
+			}
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -271,6 +313,87 @@ func (p *liveResourceGraphProvider) queryARMFallback(
 	callCtx, cancel := context.WithTimeout(ctx, p.requestTimeout)
 	defer cancel()
 	return p.armClient.GetResource(callCtx, request)
+}
+
+// queryARMFallbackWithRetry issues one bounded ARM fallback GET under the
+// Resource Graph retry policy: throttled and transport-transient (per-call
+// timeout) failures retry with capped backoff up to maxRetries, while
+// permission, skip-token, token-expiry, unsupported, and unknown classes
+// return terminally so the caller merges partial evidence with no retry.
+// Every issued attempt increments calls (which enforces the per-page call cap)
+// and is counted on the monitor instruments with a bounded operation label.
+func (p *liveResourceGraphProvider) queryARMFallbackWithRetry(
+	ctx context.Context,
+	request LiveARMFallbackRequest,
+	calls *int,
+) (LiveARMFallbackResponse, error) {
+	for attempt := 0; ; attempt++ {
+		if *calls >= maxLiveARMFallbackCallsPerPage {
+			return LiveARMFallbackResponse{}, errLiveARMFallbackCapHit
+		}
+		*calls++
+		response, err := p.queryARMFallback(ctx, request)
+		p.recordARMFallbackAttempt(ctx, err)
+		if err == nil {
+			return response, nil
+		}
+		if liveErr, ok := classifyLiveProviderError(err); ok && liveErr.kind == liveProviderErrorThrottled {
+			// Mirror the Resource Graph path: throttling merges partial
+			// evidence when observed, even when a later retry recovers.
+			p.mergeAccess(ScopeAccess{
+				Partial: true,
+				Reason:  WarningThrottled,
+				Message: "arm fallback throttled; fallback evidence may be partial",
+			})
+		}
+		if ctx.Err() != nil {
+			return LiveARMFallbackResponse{}, ctx.Err()
+		}
+		retryAfter, ok := liveARMFallbackRetryDelay(err)
+		if !ok || attempt >= p.maxRetries {
+			return LiveARMFallbackResponse{}, err
+		}
+		if err := p.sleep(ctx, p.boundedBackoff(retryAfter)); err != nil {
+			return LiveARMFallbackResponse{}, err
+		}
+	}
+}
+
+// liveARMFallbackRetryDelay reports whether an ARM fallback failure is
+// retryable under the Resource Graph policy: throttled errors carry their
+// Retry-After delay, and a per-call timeout (context.DeadlineExceeded with a
+// live parent context) is transport-transient. Every other class —
+// permission-hidden, skip-token expiry, token expiry, unsupported, and
+// unknown — is terminal and must not retry.
+func liveARMFallbackRetryDelay(err error) (time.Duration, bool) {
+	if liveErr, ok := classifyLiveProviderError(err); ok {
+		if liveErr.kind == liveProviderErrorThrottled {
+			return liveErr.retryAfter, true
+		}
+		return 0, false
+	}
+	if errors.Is(err, context.DeadlineExceeded) {
+		return 0, true
+	}
+	return 0, false
+}
+
+// recordARMFallbackAttempt counts one issued ARM fallback GET on the monitor
+// instruments by bounded status class. Labels carry the operation and status
+// only; the request's ARM ID, API version, and any error text never reach
+// telemetry.
+func (p *liveResourceGraphProvider) recordARMFallbackAttempt(ctx context.Context, err error) {
+	if p.metrics == nil {
+		return
+	}
+	class := StatusClassSuccess
+	if err != nil {
+		class = StatusClassError
+		if liveErr, ok := classifyLiveProviderError(err); ok && liveErr.kind == liveProviderErrorThrottled {
+			class = StatusClassThrottled
+		}
+	}
+	p.metrics.RecordAPICall(ctx, p.metricsBoundary, liveARMFallbackAPIOperation, class)
 }
 
 func liveARMFallbackExtension(

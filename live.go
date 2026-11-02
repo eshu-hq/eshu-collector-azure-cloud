@@ -101,6 +101,9 @@ type LiveProviderFactory struct {
 	BackoffCap time.Duration
 	// Sleep is injectable for tests. Nil uses a context-aware timer.
 	Sleep func(context.Context, time.Duration) error
+	// Metrics records bounded-label ARM fallback call evidence. A nil value
+	// disables fallback call accounting; fact emission is unchanged.
+	Metrics Metrics
 }
 
 // PageProvider returns a read-only Resource Graph page provider when explicitly
@@ -135,6 +138,10 @@ func (f LiveProviderFactory) PageProvider(
 	if f.ARMFallbackClient != nil && len(armRules) == 0 {
 		return nil, fmt.Errorf("azure live ARM fallback requires at least one allowlist rule")
 	}
+	metrics := f.Metrics
+	if metrics == nil {
+		metrics = NopMetrics{}
+	}
 	return &liveResourceGraphProvider{
 		client:               f.ResourceGraphClient,
 		armClient:            f.ARMFallbackClient,
@@ -147,6 +154,14 @@ func (f LiveProviderFactory) PageProvider(
 		maxRetries:           normalizedLiveRetries(f.MaxRetries),
 		backoffCap:           normalizedLiveBackoffCap(f.BackoffCap),
 		sleep:                normalizedLiveSleep(f.Sleep),
+		metrics:              metrics,
+		// Fallback call accounting uses a minimal boundary: scope kind and
+		// the arm_fallback lane are bounded enums, and no tenant, scope,
+		// resource, or credential identity is ever copied into labels.
+		metricsBoundary: Boundary{
+			ScopeKind:  strings.TrimSpace(target.ScopeKind),
+			SourceLane: SourceLaneARMFallback,
+		},
 	}, nil
 }
 
@@ -162,6 +177,8 @@ type liveResourceGraphProvider struct {
 	maxRetries           int
 	backoffCap           time.Duration
 	sleep                func(context.Context, time.Duration) error
+	metrics              Metrics
+	metricsBoundary      Boundary
 
 	mu     sync.Mutex
 	access ScopeAccess
