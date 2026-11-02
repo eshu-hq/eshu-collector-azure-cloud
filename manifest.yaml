@@ -1,0 +1,67 @@
+apiVersion: eshu.dev/v1alpha1
+kind: ComponentPackage
+metadata:
+  id: dev.eshu.collector.azure-cloud
+  name: Azure cloud collector
+  publisher: eshu-hq
+  version: 0.1.0
+spec:
+  compatibleCore: ">=0.0.5 <0.2.0"
+  componentType: collector
+  collectorKinds:
+    - azure
+  runtime:
+    sdkProtocol: collector-sdk/v1alpha1
+    adapter: process
+  artifacts:
+    # Local-build linux/amd64 digest (docker build --platform linux/amd64 on
+    # 2026-11-02); re-pin with the registry digest on the first image push.
+    - platform: linux/amd64
+      image: ghcr.io/eshu-hq/eshu-collector-azure-cloud@sha256:a5dcbc1d4e404ea68a67673c846276f63adb54689e3b6a832b32aeec38df7e29
+  emittedFacts:
+    - kind: azure_cloud_resource
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: azure_cloud_relationship
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: azure_tag_observation
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: azure_identity_observation
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: azure_dns_record
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: azure_image_reference
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: azure_resource_change
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+    - kind: azure_collection_warning
+      schemaVersions:
+        - 1.0.0
+      sourceConfidence:
+        - reported
+  consumerContracts:
+    reducer:
+      phases:
+        - source_evidence_only:no_graph_truth
+  telemetry:
+    metricsPrefix: eshu_dp_azure_

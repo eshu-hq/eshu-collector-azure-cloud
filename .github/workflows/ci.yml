@@ -11,22 +11,20 @@ name: ci
 # the required context name never churns; only the bodies moved. Pinned to
 # the v2 merge commit the selftest callers proved green, never the tag.
 #
-# Empty-tree notes: the repo holds a bare go.mod plus doc.go, so the Go lanes
-# have one statement-free package to judge. coverage-floor starts at 0 and
-# may only rise; #2 ratchets it toward 90 as the port lands.
+# Coverage notes: the ported collector holds real coverable statements, so
+# coverage-floor is ratcheted from 0 to the measured 76 (#2) and may only
+# rise toward 90 from here; never lower it or delete assertions to move it.
 #
-# Image note: no Dockerfile ships today, so run-image follows the image
-# filter only, never the non-PR short-circuit (a bare `docker build` with no
-# Dockerfile would fail every push and sweep). A Dockerfile PR runs a real
-# build (no push) through the reusable; until then the lane skips. #3 closes
-# on that first build proof.
+# Image note: the Dockerfile builds the actual collector, so run-image follows
+# the image filter and the lane runs a real build (no push) through the
+# reusable. #3 closed on the first build proof (local digest recorded in the
+# port handoff; the manifest re-pins on the first registry push).
 on:
   pull_request:
   push:
     branches: [main]
   schedule:
-    # Weekly Monday 04:23 UTC sweep: every lane runs as a record, except the
-    # image lane (nothing to build until a Dockerfile lands, #3). Scan
+    # Weekly Monday 04:23 UTC sweep: every lane runs as a record. Scan
     # findings on scheduled runs fail their lanes; triage rides the run
     # artifacts until the reusable grows a filing hook (upstream follow-up).
     - cron: '23 4 * * 1'
@@ -118,7 +116,7 @@ jobs:
     with:
       module: azure-cloud
       go-version-file: go.mod
-      coverage-floor: 0
+      coverage-floor: 76
       # Pin every tool the retired lanes pinned. Reusable defaults float
       # across tags, and this move must neither downgrade nor silently
       # upgrade a scanner. (gosec stays at v2.30.0, newer than the default;
@@ -133,8 +131,9 @@ jobs:
       run-test: ${{ github.event_name != 'pull_request' || needs.changes.outputs.go == 'true' || needs.changes.outputs.fixtures == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.misc == 'true' || needs.changes.outputs.workflow == 'true' }}
       run-race: ${{ github.event_name != 'pull_request' || needs.changes.outputs.go == 'true' || needs.changes.outputs.deps == 'true' || needs.changes.outputs.misc == 'true' || needs.changes.outputs.workflow == 'true' }}
       run-shell: ${{ github.event_name != 'pull_request' || needs.changes.outputs.shell == 'true' || needs.changes.outputs.workflow == 'true' }}
-      # Filter-only (see the image note above): no Dockerfile exists, so the
-      # non-PR short-circuit would run a bare build with nothing to build.
+      # Filter-only (see the image note above): the Dockerfile builds the
+      # actual collector, so any Dockerfile or cmd change runs a real
+      # image build (no push) in the lane.
       run-image: ${{ needs.changes.outputs.image == 'true' }}
       # No boundary gate in this repo; the port (#2) owns its definition.
       run-boundary: false

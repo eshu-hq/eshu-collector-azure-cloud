@@ -1,0 +1,10 @@
+[
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_cloud_resource","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"},
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_cloud_relationship","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"},
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_tag_observation","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"},
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_identity_observation","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"},
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_dns_record","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"},
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_image_reference","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"},
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_resource_change","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"},
+  {"expires_at":"2027-09-01T00:00:00Z","kind":"azure_collection_warning","producer_id":"dev.eshu.collector.azure-cloud","revoked":false,"schema_versions":["1.0.0"],"scope":"azure","version":"0.1.0"}
+]
