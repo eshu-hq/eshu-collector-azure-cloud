@@ -1,96 +1,78 @@
 # eshu-collector-azure-cloud
 
-Eshu Azure cloud collector satellite. Pre-release: holds no producer authority
-until its reviewed cutover. Refs eshu-hq/eshu#8853, part of #6707; satellite
-port tracked as #2, image lane as #3 (closed: the Dockerfile builds the actual
-collector, no push).
+**Status: pre-release.** Eshu core still owns this data in
+production. This repo has no authority to publish facts on its own
+yet.
 
-The satellite observes Azure provider truth from fixtures and emits versioned
-source facts through the published Eshu SDK stdio contract
-(`collector-sdk/v1alpha1`). Core keeps admission, identity, projection,
-persistence, and recovery. See [PORT_PLAN.md](PORT_PLAN.md) for the in-tree
-source map and [NOT_PORTED.md](NOT_PORTED.md) for what stays in core.
+In a nutshell: this collector reads Azure resource data and hands
+Eshu evidence about what exists in an Azure scope, how those
+resources relate, and what changed. Eshu can then answer which
+Azure resources it has seen and how they connect. The collector
+only collects and returns evidence; it doesn't store anything
+itself.
 
-## Contracts
-
-- `github.com/eshu-hq/eshu-sdk/collector` `v0.2.0-rc.3` (immutable, proxy-verified)
-- `github.com/eshu-hq/eshu-sdk/factschema` `v0.1.0-rc.12` (immutable, proxy-verified;
-  pins the fixture pack too)
-- `github.com/eshu-hq/eshu-sdk/wirecontract` `v0.1.0-rc.1` (latest pin recorded;
-  not imported — it publishes API/MCP wire shapes this collector never touches)
-
-Every repo imports the contracts; no repo imports another repo. All eight
-emitted kinds (`azure_cloud_resource`, `azure_cloud_relationship`,
-`azure_tag_observation`, `azure_identity_observation`, `azure_dns_record`,
-`azure_image_reference`, `azure_resource_change`,
-`azure_collection_warning`) have typed structs in `factschema/azure/v1`; a
-kind with no typed struct would be flagged, never invented inline.
-
-## Run
-
-Fixture proof (default; issues no live Azure call):
-
-```bash
-go run ./cmd/collector \
-  --redaction-key-file /path/to/key \
-  --generation-id generation-fixture-1
+```mermaid
+flowchart LR
+    A[Azure, or fixture files] --> C[This collector]
+    C --> H[Eshu host process]
+    H --> E[Eshu core]
 ```
 
-Host protocol (the host owns claims and commits; one claim per invocation):
+In text: Azure (or fixture files) -> this collector -> Eshu host
+process -> Eshu core.
 
-```bash
-go run ./cmd/collector --sdk-stdio < request.json > result.json
-```
+## When to use it
 
-The request carries `protocol_version`, the host `claim`, and `config.source`
-with `collector_instance_id`, `targets`, `fixture_pages`, and an optional
-`redaction_key_file`. Live transport ships but stays unproven (no tenant
-exists yet): it requires the explicit `"live": true` opt-in plus a host claim
-the satellite authorizes before any adapter is built, resolves the credential
-by NAME from the ambient workload identity, and fails closed otherwise. The
-zero-value factory still returns `ErrLiveProviderGated`. Credential values
-are never read from config and never logged; live-shaped rows redact
-identically to fixtures. Tenant-backed proof stays deferred to
-eshu-hq/eshu#9825.
+Use it when Eshu needs evidence about Azure resources in a
+subscription, management group, or tenant-level scope, including
+their tags, identities, DNS records, image references, and
+reported changes.
 
-Image lane (builds the actual collector; `docker run` with no args repeats
-the fixture proof):
+## When not to use it
 
-```bash
-docker build --platform linux/amd64 -t azure-cloud-collector:local .
-docker run --rm --platform linux/amd64 azure-cloud-collector:local
-```
+- Don't use it as a live Azure browser or reporting tool.
+  It returns facts to the Eshu host; it has no user interface.
+- Don't expect proven live Azure reads yet.
+  Live transport ships behind an explicit opt-in, no tenant-backed
+  proof exists yet, and the zero-value live factory fails closed.
+- Don't use it for non-Azure clouds or for Azure data-plane
+  contents (object data, secrets, or record payloads).
 
-## Verify
+## How Eshu runs it
 
-```bash
-make ci
-```
+The host runs one claim per process invocation.
+It starts the binary with `--sdk-stdio`, writes one
+`collector-sdk/v1alpha1` request to stdin, and reads one result
+from stdout. The host owns admission and storage; this binary
+never commits facts itself.
 
-`make ci` runs the same lint, test, and race commands CI runs: `go vet`,
-`golangci-lint run` plus the gofumpt format check, `go mod tidy -diff`, the
-500-line `.go` file cap, `go build`, the full test suite, and the race suite.
-The race lane additionally enforces the coverage floor (currently 76; see
-`CONTRIBUTING.md` — it may only rise).
+## Documentation
 
-## Releases
+Start at the [docs index](docs/README.md). Shortcuts people use most:
 
-Every artifact in `manifest.yaml` is digest-pinned (`@sha256:…`, never
-`:latest`). The current digest is a local-build digest (see the comment in
-`manifest.yaml`): after the first image push, re-pin it with the registry
-digest from the release job summary. Base images in `Dockerfile` are pinned
-the same way; re-pin them when bumping either base. `version` in
-`manifest.yaml` and the git tag must match (`v0.1.0` for `0.1.0`); pushing
-a `v*` tag runs `release.yml`, which builds, signs, and publishes the image
-plus SBOM and provenance attestations. The workflow publishes only when the
-tag is exactly `v` plus the manifest version and points at the protected
-`main` head; anything else fails before anything builds or pushes.
+| Page | What you'll find there |
+|---|---|
+| [Getting started](docs/getting-started/README.md) | Run it once, see facts come back |
+| [Configuration](docs/reference/configuration.md) | Every config field, credentials, and the claim budget |
+| [Facts](docs/reference/facts.md) | The fact kinds it emits, mirroring the manifest |
+| [Diagrams](docs/diagrams/README.md) | Every diagram, with captions and text versions |
 
-What pushes publish: every push to `main` publishes `:main`, `:latest`
-(both moving), and `:sha-<long-sha>`; every push of a version tag publishes
-that tag. Nothing runs on a pull request and nothing here deploys. Copy the
-`seed.image` reference
-(`ghcr.io/eshu-hq/eshu-collector-azure-cloud@sha256:…`) from the release job
-summary into the activation. No tenant exists yet, so a release ships the
-image but proves nothing live; tenant-backed proof stays deferred to
-eshu-hq/eshu#9825.
+Older notes: [PORT_PLAN.md](PORT_PLAN.md) covers where the in-core
+source came from, and [NOT_PORTED.md](NOT_PORTED.md) lists what
+stays in Eshu core.
+
+## Related repos
+
+- [eshu](https://github.com/eshu-hq/eshu), Eshu core
+- [eshu-sdk](https://github.com/eshu-hq/eshu-sdk), collector and fact-schema contracts
+- [eshu-deploy](https://github.com/eshu-hq/eshu-deploy), deployment charts and activations
+
+## Development
+
+Run `make ci` to check a change the way CI does.
+
+## Contributing, security, and license
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) before opening a change.
+There's no `SECURITY.md` and no `LICENSE` file in this repo.
+Source files carry `SPDX-License-Identifier: MIT` headers.
