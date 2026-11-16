@@ -20,8 +20,8 @@ import (
 // below keeps the two from drifting so a dependency bump is always deliberate
 // and recorded in the handoff.
 const (
-	pinnedCollectorVersion  = "v0.2.0-rc.3"
-	pinnedFactschemaVersion = "v0.1.0-rc.12"
+	pinnedCollectorVersion  = "v0.2.0-rc.4"
+	pinnedFactschemaVersion = "v0.1.0-rc.19"
 )
 
 // TestPinnedContractVersions proves the module pins the exact immutable SDK
