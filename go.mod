@@ -4,7 +4,7 @@ go 1.26.11
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.24.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.14.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.15.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resourcegraph/armresourcegraph v0.10.0
 	github.com/Azure/azure-sdk-for-go/sdk/resourcemanager/resources/armresources v1.2.0
 	github.com/eshu-hq/eshu-sdk/collector v0.2.0-rc.4
@@ -14,7 +14,7 @@ require (
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/internal v1.13.0 // indirect
-	github.com/AzureAD/microsoft-authentication-library-for-go v1.8.0 // indirect
+	github.com/AzureAD/microsoft-authentication-library-for-go v1.10.1 // indirect
 	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/kr/text v0.2.0 // indirect
